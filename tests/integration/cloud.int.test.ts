@@ -196,6 +196,26 @@ describe('flujo completo contra Supabase', () => {
     expect(upd.data).toHaveLength(0)
   })
 
+  it('conflictos: gana siempre el cambio más reciente', async () => {
+    await signIn(0)
+    const uid = users[0].id
+    const ex = saveExercise({ ...newExercise(uid, 'kg'), name: 'Curl' })
+    await flush()
+    const t = (min: number) => new Date(Date.now() + min * 60_000).toISOString()
+    // Dispositivo B edita "ahora+2"; llega tarde una edición offline de A hecha "ahora+1": se ignora.
+    await supabase.from('exercises').upsert({ ...ex, name: 'Curl B', updated_at: t(2) })
+    await supabase.from('exercises').upsert({ ...ex, name: 'Curl A (offline)', updated_at: t(1) })
+    expect((await supabase.from('exercises').select('name').eq('id', ex.id).single()).data?.name).toBe('Curl B')
+    // Un borrado offline anterior a la edición de B no la elimina.
+    const del1 = await supabase.rpc('sync_delete', { p_table: 'exercises', p_key: ex.id, p_deleted_at: t(1.5) })
+    expect(del1.data).toBe(false)
+    // Un borrado posterior sí, y una edición antigua no lo resucita.
+    const del2 = await supabase.rpc('sync_delete', { p_table: 'exercises', p_key: ex.id, p_deleted_at: t(3) })
+    expect(del2.data).toBe(true)
+    await supabase.from('exercises').upsert({ ...ex, name: 'Zombi', updated_at: t(2.5) })
+    expect((await supabase.from('exercises').select('id').eq('id', ex.id)).data).toHaveLength(0)
+  })
+
   it('RENACER: borra el progreso y conserva rutinas y ejercicios', async () => {
     await signIn(0)
     await rebirth()

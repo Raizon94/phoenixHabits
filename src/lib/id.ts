@@ -1,3 +1,5 @@
+import { now } from './clock'
+
 /** UUID v4 generado en el cliente: permite reintentos idempotentes y trabajo offline. */
 export function newId(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
@@ -10,6 +12,7 @@ export function newId(): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
 }
 
+/** Marca de tiempo de un cambio, con el reloj corregido según el servidor. */
 export function nowISO(): string {
-  return new Date().toISOString()
+  return new Date(now()).toISOString()
 }

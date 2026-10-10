@@ -3,7 +3,7 @@ import { newId, nowISO } from '@/lib/id'
 import type { BodyWeightLog, ProgressPhoto } from '@/types'
 import type { ISODate } from '@/utils/date'
 import { compressImage } from '@/utils/image'
-import { fetchAll, num, overlayPending, remove, unwrap, upsert } from './sync'
+import { fetchAll, num, overlayPending, remove, upsert } from './sync'
 
 // ───────────── Peso corporal ─────────────
 
@@ -83,5 +83,6 @@ export function updatePhoto(photo: ProgressPhoto) {
 export async function deletePhoto(photo: ProgressPhoto) {
   const { error } = await supabase.storage.from(PHOTO_BUCKET).remove([photo.storage_path])
   if (error) throw new Error(error.message)
-  unwrap(await supabase.from('progress_photos').delete().eq('id', photo.id).select('id'))
+  const { error: delErr } = await supabase.rpc('sync_delete', { p_table: 'progress_photos', p_key: photo.id, p_deleted_at: nowISO() })
+  if (delErr) throw new Error(delErr.message)
 }

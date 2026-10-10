@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { getQueue, hasQueue, onFlushed, scheduleFlush } from '@/services/sync'
+import { getQueue, hasQueue, onFlushed, resyncClock, scheduleFlush } from '@/services/sync'
 import type { SyncState } from '@/services/syncQueue'
 
 const initial: SyncState = { status: 'idle', pending: 0, lastError: null, lastSyncedAt: null }
@@ -18,17 +18,19 @@ export function SyncProvider({ userId, children }: { userId: string; children: R
 
   useEffect(() => {
     // Al terminar de sincronizar, refrescar vistas agregadas calculadas en el servidor.
+    // Tras sincronizar se recargan los datos: si otro dispositivo hizo un cambio más
+    // reciente, la pantalla muestra siempre la versión ganadora (la última).
     return onFlushed(() => {
-      qc.invalidateQueries({ queryKey: ['sessionSummaries'] })
-      qc.invalidateQueries({ queryKey: ['exerciseHistory'] })
-      qc.invalidateQueries({ queryKey: ['trainingStats'] })
+      qc.invalidateQueries({
+        predicate: (q) => !['session', 'activeSession', 'photoUrls'].includes(String(q.queryKey[0])),
+      })
     })
   }, [qc])
 
   useEffect(() => {
     const on = () => {
       setOnline(true)
-      scheduleFlush(0)
+      void resyncClock().finally(() => scheduleFlush(0))
     }
     const off = () => setOnline(false)
     const vis = () => document.visibilityState === 'visible' && scheduleFlush(0)

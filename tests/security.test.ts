@@ -48,7 +48,7 @@ async function as(user: string | null, sql: string, params: unknown[] = []) {
 beforeAll(async () => {
   db = new PGlite()
   await db.exec(SUPABASE_STUB)
-  for (const f of ['20261010000001_init.sql', '20261010000003_rebirth.sql', '20261010000005_user_delete.sql']) {
+  for (const f of ['20261010000001_init.sql', '20261010000003_rebirth.sql', '20261010000005_user_delete.sql', '20261010000006_conflicts.sql']) {
     await db.exec(readFileSync(`supabase/migrations/${f}`, 'utf8'))
   }
   await db.exec(`insert into auth.users (id, email) values ('${A}', 'a@x.com'), ('${B}', 'b@x.com')`)
@@ -191,5 +191,60 @@ describe('borrado de cuenta', () => {
     await db.exec(`delete from auth.users where id = '${B}'`)
     const left = await db.query(`select count(*)::int as n from public.exercises where user_id = '${B}'`)
     expect((left.rows[0] as { n: number }).n).toBe(0)
+  })
+})
+
+describe('conflictos: siempre gana lo último', () => {
+  const C = '33333333-3333-4333-8333-333333333333'
+  beforeAll(async () => {
+    await db.exec(`insert into auth.users (id, email) values ('${C}', 'c@x.com')`)
+  })
+  const ex = 'aaaaaaaa-0000-4000-8000-000000000001'
+
+  it('una edición antigua no pisa una más reciente', async () => {
+    await as(C, `insert into exercises (id, name, updated_at) values ($1, 'Original', '2026-10-10T10:00Z')`, [ex])
+    await as(C, `insert into exercises (id, name, updated_at) values ($1, 'Nueva', '2026-10-10T12:00Z') on conflict (id) do update set name = excluded.name, updated_at = excluded.updated_at`, [ex])
+    await as(C, `insert into exercises (id, name, updated_at) values ($1, 'Vieja offline', '2026-10-10T11:00Z') on conflict (id) do update set name = excluded.name, updated_at = excluded.updated_at`, [ex])
+    expect((await as(C, `select name from exercises where id = $1`, [ex])).rows[0].name).toBe('Nueva')
+  })
+
+  it('un borrado antiguo no elimina una edición posterior', async () => {
+    const r = await as(C, `select sync_delete('exercises', $1, '2026-10-10T11:30Z') as deleted`, [ex])
+    expect(r.rows[0].deleted).toBe(false)
+    expect((await as(C, `select count(*)::int as n from exercises where id = $1`, [ex])).rows[0].n).toBe(1)
+  })
+
+  it('un borrado reciente elimina y una edición antigua no lo resucita', async () => {
+    const r = await as(C, `select sync_delete('exercises', $1, '2026-10-10T13:00Z') as deleted`, [ex])
+    expect(r.rows[0].deleted).toBe(true)
+    await as(C, `insert into exercises (id, name, updated_at) values ($1, 'Zombi', '2026-10-10T12:30Z') on conflict (id) do update set name = excluded.name, updated_at = excluded.updated_at`, [ex])
+    expect((await as(C, `select count(*)::int as n from exercises where id = $1`, [ex])).rows[0].n).toBe(0)
+  })
+
+  it('una edición posterior al borrado sí lo recrea (es lo último)', async () => {
+    await as(C, `insert into exercises (id, name, updated_at) values ($1, 'Recreado', '2026-10-10T14:00Z') on conflict (id) do update set name = excluded.name, updated_at = excluded.updated_at`, [ex])
+    expect((await as(C, `select name from exercises where id = $1`, [ex])).rows[0].name).toBe('Recreado')
+    expect((await as(C, `select count(*)::int as n from sync_tombstones`)).rows[0].n).toBe(0)
+  })
+
+  it('el peso usa la fecha como clave de borrado', async () => {
+    await as(C, `insert into body_weight_logs (log_date, weight_kg, updated_at) values ('2026-10-09', 80, '2026-10-10T10:00Z')`)
+    await as(C, `select sync_delete('body_weight_logs', '2026-10-09', '2026-10-10T11:00Z')`)
+    await as(C, `insert into body_weight_logs (log_date, weight_kg, updated_at) values ('2026-10-09', 81, '2026-10-10T10:30Z')`)
+    expect((await as(C, `select count(*)::int as n from body_weight_logs`)).rows[0].n).toBe(0)
+  })
+
+  it('tras RENACER, los cambios offline anteriores no recrean datos', async () => {
+    await as(C, `select rebirth()`)
+    const habit = (await as(C, `select id from habits limit 1`)).rows[0].id
+    await as(C, `insert into habit_logs (habit_id, log_date, completed, updated_at) values ($1, '2026-10-09', true, '2020-01-01T00:00Z')`, [habit])
+    expect((await as(C, `select count(*)::int as n from habit_logs`)).rows[0].n).toBe(0)
+    await as(C, `insert into habit_logs (habit_id, log_date, completed, updated_at) values ($1, '2026-10-09', true, now() + interval '1 minute')`, [habit])
+    expect((await as(C, `select count(*)::int as n from habit_logs`)).rows[0].n).toBe(1)
+  })
+
+  it('las lápidas son privadas y sync_delete no acepta tablas arbitrarias', async () => {
+    expect((await as(A, `select count(*)::int as n from sync_tombstones`)).rows[0].n).toBe(0)
+    await expect(as(C, `select sync_delete('profiles', 'x', now())`)).rejects.toThrow(/no permitida/)
   })
 })

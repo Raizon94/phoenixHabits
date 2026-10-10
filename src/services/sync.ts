@@ -1,5 +1,7 @@
 import { supabase } from '@/lib/supabase'
-import { SyncQueue, type EnqueueInput, type ExecResult, type Row, type SyncOp, type SyncTable } from './syncQueue'
+import { nowISO } from '@/lib/id'
+import { syncClock } from '@/lib/clock'
+import { SyncQueue, opKey, type EnqueueInput, type ExecResult, type Row, type SyncOp, type SyncTable } from './syncQueue'
 
 /** Clave de conflicto natural de las tablas que no se escriben por id. */
 export const CONFLICT_KEYS: Partial<Record<SyncTable, string>> = {
@@ -23,7 +25,15 @@ async function executeOps(ops: SyncOp[]): Promise<ExecResult> {
       const { error } = await supabase.from(first.table).upsert(rows, { onConflict: first.onConflict ?? CONFLICT_KEYS[first.table] ?? 'id', defaultToNull: false })
       if (error) return { ok: false, retry: isNetworkError(error.message, error.code), message: error.message, code: error.code }
     } else {
-      const { error } = await supabase.from(first.table).delete().match(first.match ?? {})
+      // Borrado con resolución de conflictos: deja una lápida y solo borra si la fila no
+      // se modificó después (si se modificó, esa edición es lo último y se conserva).
+      const m = first.match ?? {}
+      const key = first.table === 'body_weight_logs' ? m.log_date : m.id
+      const { error } = await supabase.rpc('sync_delete', {
+        p_table: first.table,
+        p_key: String(key),
+        p_deleted_at: (first.row?.deleted_at as string | undefined) ?? new Date(first.ts).toISOString(),
+      })
       if (error) return { ok: false, retry: isNetworkError(error.message, error.code), message: error.message, code: error.code }
     }
     return { ok: true }
@@ -42,8 +52,20 @@ export function initSync(userId: string): SyncQueue {
   if (queue && queueUser === userId) return queue
   queue = new SyncQueue(executeOps, typeof window !== 'undefined' ? window.localStorage : null, userId)
   queueUser = userId
-  scheduleFlush(0)
+  // Ajustar el reloj antes de enviar nada: decide qué cambio es el más reciente.
+  void syncClock(fetchServerNow).finally(() => scheduleFlush(0))
   return queue
+}
+
+async function fetchServerNow(): Promise<string> {
+  const { data, error } = await supabase.rpc('server_now')
+  if (error) throw new Error(error.message)
+  return data as string
+}
+
+/** Vuelve a medir el desfase de reloj (al recuperar la conexión). */
+export function resyncClock() {
+  return syncClock(fetchServerNow)
 }
 
 export function getQueue(): SyncQueue {
@@ -84,7 +106,9 @@ export function upsert(table: SyncTable, row: Row | Row[]) {
 }
 
 export function remove(table: SyncTable, match: Row) {
-  write({ table, kind: 'delete', match })
+  // La clave coincide con la de los upserts de esa fila, para que se fusionen en la cola.
+  const key = opKey(table, match, match.id === undefined ? CONFLICT_KEYS[table] : undefined)
+  write({ table, kind: 'delete', match, key, row: { deleted_at: nowISO() } })
 }
 
 /**

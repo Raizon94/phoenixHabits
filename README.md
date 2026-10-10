@@ -49,7 +49,12 @@ tests/                 Vitest; incluye pruebas de seguridad RLS sobre la migraci
 - **Seguridad:** cada tabla tiene `user_id` con RLS `user_id = auth.uid()`. Las claves foráneas compuestas `(id, user_id)` impiden enlazar datos de otro usuario y el rol `anon` no tiene acceso. El frontend solo usa la clave **pública**.
 - **Historial inmutable:** cada entrenamiento crea filas nuevas. La función `last_completed_sets()` devuelve las series de la última sesión **completada** de cada ejercicio, sea cual sea la rutina.
 - **Offline:** todas las escrituras pasan por una cola persistida en `localStorage`, que fusiona las operaciones y reintenta al volver la conexión. Los IDs se generan en el cliente (reintentos idempotentes, sin duplicados). El entrenamiento en curso tiene además una copia local para recuperarlo.
-- **Multidispositivo:** un trigger descarta las escrituras con `updated_at` más antiguo que el guardado, para no pisar datos más recientes.
+- **Conflictos (siempre gana lo último):** cada cambio lleva la hora real en que se hizo (`updated_at`), con el reloj del dispositivo corregido según la hora del servidor.
+  - Una edición más antigua que la guardada se ignora.
+  - Un borrado solo se aplica si el dato no se modificó después, y deja una *lápida* con su hora.
+  - Una edición anterior a esa lápida no resucita lo borrado; una posterior sí lo recrea, porque es lo último.
+  - Nada anterior a un RENACER puede recrear datos.
+  - Tras cada sincronización se recargan los datos, así la pantalla muestra siempre la versión ganadora.
 
 ---
 
@@ -62,6 +67,7 @@ tests/                 Vitest; incluye pruebas de seguridad RLS sobre la migraci
    3. `supabase/migrations/20261010000003_rebirth.sql`: función RENACER.
    4. `supabase/migrations/20261010000004_backfill_existing_users.sql`: inicializa (perfil y hábitos) los usuarios creados antes del esquema. Es idempotente.
    5. `supabase/migrations/20261010000005_user_delete.sql`: permite borrar una cuenta con historial de entrenamientos.
+   6. `supabase/migrations/20261010000006_conflicts.sql`: resolución de conflictos (lápidas, borrados condicionales, barrera de RENACER y hora del servidor).
 
    También puedes aplicarlas con la CLI: `npx supabase link --project-ref <ref>` y luego `npx supabase db push`.
 3. **Storage:** la migración 2 crea el bucket **privado** `progress-photos` (5 MB por archivo; jpeg, webp o png). Las fotos se sirven con URLs firmadas de 10 minutos y cada usuario solo accede a su carpeta `<user_id>/…`.
