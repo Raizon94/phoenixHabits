@@ -61,6 +61,7 @@ tests/                 Vitest; incluye pruebas de seguridad RLS sobre la migraci
    2. `supabase/migrations/20261010000002_storage.sql`: bucket privado `progress-photos` y sus políticas.
    3. `supabase/migrations/20261010000003_rebirth.sql`: función RENACER.
    4. `supabase/migrations/20261010000004_backfill_existing_users.sql`: inicializa (perfil y hábitos) los usuarios creados antes del esquema. Es idempotente.
+   5. `supabase/migrations/20261010000005_user_delete.sql`: permite borrar una cuenta con historial de entrenamientos.
 
    También puedes aplicarlas con la CLI: `npx supabase link --project-ref <ref>` y luego `npx supabase db push`.
 3. **Storage:** la migración 2 crea el bucket **privado** `progress-photos` (5 MB por archivo; jpeg, webp o png). Las fotos se sirven con URLs firmadas de 10 minutos y cada usuario solo accede a su carpeta `<user_id>/…`.

@@ -48,7 +48,7 @@ async function as(user: string | null, sql: string, params: unknown[] = []) {
 beforeAll(async () => {
   db = new PGlite()
   await db.exec(SUPABASE_STUB)
-  for (const f of ['20261010000001_init.sql', '20261010000003_rebirth.sql']) {
+  for (const f of ['20261010000001_init.sql', '20261010000003_rebirth.sql', '20261010000005_user_delete.sql']) {
     await db.exec(readFileSync(`supabase/migrations/${f}`, 'utf8'))
   }
   await db.exec(`insert into auth.users (id, email) values ('${A}', 'a@x.com'), ('${B}', 'b@x.com')`)
@@ -180,5 +180,16 @@ describe('RENACER', () => {
     expect(s.rows[0].reborn_at).not.toBeNull()
     // El otro usuario conserva sus datos
     expect((await as(B, `select count(*)::int as n from body_weight_logs`)).rows[0].n).toBe(1)
+  })
+})
+
+describe('borrado de cuenta', () => {
+  it('se puede borrar un usuario con historial de entrenamientos', async () => {
+    const ex = (await as(B, `insert into exercises (name) values ('Sentadilla') returning id`)).rows[0].id
+    const s = (await as(B, `insert into workout_sessions (routine_name, session_date, started_at, ended_at, status) values ('Legs', '2026-10-10', '2026-10-10T10:00Z', '2026-10-10T11:00Z', 'completed') returning id`)).rows[0].id
+    await as(B, `insert into workout_exercises (session_id, exercise_id, position) values ($1, $2, 0)`, [s, ex])
+    await db.exec(`delete from auth.users where id = '${B}'`)
+    const left = await db.query(`select count(*)::int as n from public.exercises where user_id = '${B}'`)
+    expect((left.rows[0] as { n: number }).n).toBe(0)
   })
 })
