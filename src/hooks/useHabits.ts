@@ -94,7 +94,7 @@ export function useHabits() {
     index,
     starts,
     loading: habitsQ.isPending || logsQ.isPending,
-    error: habitsQ.error ?? logsQ.error,
+    error: habitsQ.data && logsQ.data ? null : (habitsQ.error ?? logsQ.error),
     refetch: () => {
       habitsQ.refetch()
       logsQ.refetch()

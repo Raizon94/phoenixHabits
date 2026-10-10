@@ -37,7 +37,7 @@ export function usePhotos() {
     [userId, qc],
   )
 
-  return { photos, loading: q.isPending, error: q.error, refetch: q.refetch, upload, update, remove }
+  return { photos, loading: q.isPending, error: q.data ? null : q.error, refetch: q.refetch, upload, update, remove }
 }
 
 /** URLs firmadas (10 min) para mostrar fotos privadas; se renuevan antes de caducar. */

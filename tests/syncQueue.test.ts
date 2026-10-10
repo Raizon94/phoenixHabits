@@ -76,3 +76,13 @@ describe('cola de sincronización', () => {
     expect(q.getOps()).toHaveLength(0)
   })
 })
+
+describe('descartar operaciones', () => {
+  it('dropWhere elimina solo las que cumplen la condición', () => {
+    const q = new SyncQueue(async () => ({ ok: true }), null)
+    q.enqueue({ table: 'workout_sets', kind: 'upsert', row: { id: 'a', workout_exercise_id: 'we1' } })
+    q.enqueue({ table: 'workout_sets', kind: 'upsert', row: { id: 'b', workout_exercise_id: 'we2' } })
+    q.dropWhere((o) => o.row?.workout_exercise_id === 'we1')
+    expect(q.getOps().map((o) => o.row?.id)).toEqual(['b'])
+  })
+})

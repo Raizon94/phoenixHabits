@@ -224,6 +224,13 @@ export class SyncQueue {
     this.setState({ pending: this.ops.length })
   }
 
+  /** Descarta operaciones pendientes que cumplan una condición. */
+  dropWhere(pred: (op: SyncOp) => boolean) {
+    this.ops = this.ops.filter((o) => !pred(o))
+    this.persist()
+    this.setState({ pending: this.ops.length })
+  }
+
   /** Descarta operaciones pendientes de ciertas tablas (p. ej. tras RENACER). */
   dropTables(tables: SyncTable[]) {
     const set = new Set(tables)

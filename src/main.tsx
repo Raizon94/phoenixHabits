@@ -17,8 +17,11 @@ createRoot(document.getElementById('root')!).render(
         maxAge: 1000 * 60 * 60 * 24 * 7,
         buster: 'v1',
         // Las URLs firmadas de fotos caducan: no se guardan en caché persistente.
-        dehydrateOptions: { shouldDehydrateQuery: (q) => q.state.status === 'success' && q.queryKey[0] !== 'photoUrls' },
+        // Las URLs firmadas caducan y la sesión activa tiene su propia copia local: no se persisten.
+        dehydrateOptions: { shouldDehydrateQuery: (q) => q.state.status === 'success' && !['photoUrls', 'activeSession', 'session'].includes(String(q.queryKey[0])) },
       }}
+      // La caché restaurada se muestra al instante y se revalida en segundo plano.
+      onSuccess={() => queryClient.invalidateQueries()}
     >
       <App />
     </PersistQueryClientProvider>

@@ -15,7 +15,7 @@ import type {
 } from '@/types'
 import type { ISODate } from '@/utils/date'
 import { bestOfSets, buildSessionDraft, groupPreviousSets, mergeBest, type ExerciseBest } from '@/utils/workout'
-import { fetchAll, num, overlayPending, remove, unwrap, upsert, write } from './sync'
+import { fetchAll, getQueue, num, overlayPending, remove, unwrap, upsert, write } from './sync'
 import type { Row } from './syncQueue'
 
 const asRow = (x: object) => x as unknown as Row
@@ -255,7 +255,14 @@ export function deleteWorkoutExercise(id: string) {
   remove('workout_exercises', { id })
 }
 
-export function deleteSession(id: string) {
+export function deleteSession(id: string, workoutExerciseIds: string[] = []) {
+  // Las escrituras pendientes de sus ejercicios/series ya no tienen sentido (y fallarían por FK).
+  const weIds = new Set(workoutExerciseIds)
+  getQueue().dropWhere(
+    (o) =>
+      (o.table === 'workout_exercises' && (o.row?.session_id === id || weIds.has(String(o.row?.id ?? o.match?.id)))) ||
+      (o.table === 'workout_sets' && weIds.has(String(o.row?.workout_exercise_id))),
+  )
   remove('workout_sessions', { id })
 }
 

@@ -109,9 +109,16 @@ export function useSessionEditor(id: string) {
   const toggleSet = useCallback(
     (weId: string, set: WorkoutSet) => {
       const completed = !set.completed
-      updateSet(weId, set.id, { completed, completed_at: completed ? nowISO() : null })
+      const patch: Partial<WorkoutSet> = { completed, completed_at: completed ? nowISO() : null }
+      // Completar una serie vacía usa los valores de la sesión anterior (como Hevy).
+      if (completed && set.weight == null && set.reps == null && session) {
+        const we = session.exercises.find((e) => e.id === weId)
+        const prev = we && previous.get(we.exercise_id)?.find((p) => p.position === set.position)
+        if (prev) Object.assign(patch, { weight: prev.weight, reps: prev.reps })
+      }
+      updateSet(weId, set.id, patch)
     },
-    [updateSet],
+    [updateSet, session, previous],
   )
 
   const addSet = useCallback(
@@ -227,7 +234,7 @@ export function useSessionEditor(id: string) {
 
   const cancel = useCallback(() => {
     if (!session) return
-    deleteSession(session.id)
+    deleteSession(session.id, session.exercises.map((e) => e.id))
     clearActiveSnapshot(session.id)
     qc.removeQueries({ queryKey: ['session', session.id] })
     qc.setQueryData(['activeSession', userId], null)

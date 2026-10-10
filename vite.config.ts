@@ -47,5 +47,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
+    // Las pruebas de integración contra Supabase real se ejecutan aparte (ver README).
+    exclude: ['tests/integration/**', 'node_modules/**'],
   },
 })

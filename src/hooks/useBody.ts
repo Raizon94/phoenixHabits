@@ -33,5 +33,5 @@ export function useWeights() {
     [userId, qc],
   )
 
-  return { logs, byDate, loading: q.isPending, error: q.error, refetch: q.refetch, save, remove }
+  return { logs, byDate, loading: q.isPending, error: q.data ? null : q.error, refetch: q.refetch, save, remove }
 }

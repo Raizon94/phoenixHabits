@@ -36,7 +36,7 @@ export function useExercises() {
     [qc, userId],
   )
 
-  return { exercises: active, allExercises: all, loading: q.isPending, error: q.error, refetch: q.refetch, upsert, remove }
+  return { exercises: active, allExercises: all, loading: q.isPending, error: q.data ? null : q.error, refetch: q.refetch, upsert, remove }
 }
 
 export function useRoutines() {
@@ -73,10 +73,10 @@ export function useRoutines() {
     [qc, userId],
   )
 
-  return { routines, loading: q.isPending || exLoading, error: q.error, refetch: q.refetch, save, remove, setAll }
+  return { routines, loading: q.isPending || exLoading, error: q.data ? null : q.error, refetch: q.refetch, save, remove, setAll }
 }
 
 export function useActiveSessionId() {
   const userId = useUserId()
-  return useQuery({ queryKey: ['activeSession', userId], queryFn: fetchActiveSessionId })
+  return useQuery({ queryKey: ['activeSession', userId], queryFn: fetchActiveSessionId, staleTime: 0 })
 }
