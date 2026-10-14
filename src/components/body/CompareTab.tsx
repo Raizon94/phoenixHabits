@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Columns2, Images, SlidersHorizontal } from 'lucide-react'
 import type { ProgressPhoto } from '@/types'
 import { usePhotos, usePhotoUrls } from '@/hooks/usePhotos'
@@ -22,19 +22,17 @@ export function CompareTab() {
   const { settings } = useSettings()
   const unit = settings.weight_unit
   const dates = useMemo(() => [...new Set(photos.map((p) => p.photo_date))].sort(), [photos])
-  const [dateA, setDateA] = useState('')
-  const [dateB, setDateB] = useState('')
+  const [selA, setDateA] = useState('')
+  const [selB, setDateB] = useState('')
   const [idxA, setIdxA] = useState(0)
   const [idxB, setIdxB] = useState(0)
   const [mode, setMode] = useState<Mode>('slider')
   const [pos, setPos] = useState(50)
 
-  useEffect(() => {
-    if (dates.length && !dateA) {
-      setDateA(dates[0])
-      setDateB(dates[dates.length - 1])
-    }
-  }, [dates, dateA])
+  // Por defecto: la foto más antigua frente a la más reciente. Se calcula en el propio
+  // render (sin esperar a un efecto) y se corrige si la fecha elegida ya no existe.
+  const dateA = dates.includes(selA) ? selA : (dates[0] ?? '')
+  const dateB = dates.includes(selB) ? selB : (dates[dates.length - 1] ?? '')
 
   const listA = photos.filter((p) => p.photo_date === dateA)
   const listB = photos.filter((p) => p.photo_date === dateB)

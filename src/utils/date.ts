@@ -122,7 +122,9 @@ const LOCALE = 'es-ES'
 
 /** Formatea un ISODate sin desplazamientos de zona horaria. */
 export function formatDate(iso: ISODate, options: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric' }): string {
-  return new Intl.DateTimeFormat(LOCALE, { ...options, timeZone: 'UTC' }).format(new Date(toUTC(iso)))
+  // Una fecha vacía o inválida nunca debe tumbar la pantalla.
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return ''
+  return new Intl.DateTimeFormat(LOCALE, { ...options, timeZone: 'UTC' }).format(new Date(toUTC(iso.slice(0, 10))))
 }
 
 export function formatLongDate(iso: ISODate): string {

@@ -42,3 +42,10 @@ describe('fechas de calendario', () => {
     expect(isValidISODate('10/10/2026')).toBe(false)
   })
 })
+
+describe('formateo robusto', () => {
+  it('una fecha vacía o inválida devuelve texto vacío en vez de fallar', () => {
+    expect(formatDate('')).toBe('')
+    expect(formatDate('basura')).toBe('')
+  })
+})
